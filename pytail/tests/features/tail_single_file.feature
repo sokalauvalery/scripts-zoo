@@ -30,3 +30,11 @@ Feature: Tail N lines of single file
 
   Scenario: Tail nonexistent file
     Then Tail nonexistent file "/fake/path" return exception "No such file /fake/path"
+
+  Scenario: Tail binary file
+    Given Generate binary file
+    Then Tail "10" lines returns "Unable to  decode file with utf-8 encoding." exception message
+
+  Scenario: Tail 3 lines of empty file
+    Given Generate text file of "0" lines
+    Then Tail "3" lines returns "0" lines from given file

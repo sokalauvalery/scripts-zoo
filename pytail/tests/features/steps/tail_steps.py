@@ -10,6 +10,10 @@ from pytail.tail import TailScriptException
 
 
 def tail_test(context, expected_count, n=None):
+    try:
+        n = int(n) if n else n
+    except ValueError:
+        n = n
     expected_count = int(expected_count)
     temp_stdout = StringIO()
     with contextlib.redirect_stdout(temp_stdout):
@@ -34,13 +38,17 @@ def step_impl(context, n):
             f.write(random + '\n')
 
 
+@given('Generate binary file')
+def step_impl(context):
+    context.path = os.path.join(TMP_DIR, 'text_file.bin')
+    n = 100
+    with open(context.path, 'wb') as f:
+        for i in range(n):
+            f.write(os.urandom(1024))
+
+
 @then('Tail "{n}" lines returns "{expected_count}" lines from given file')
 def step_impl(context, n, expected_count):
-    try:
-        n = int(n)
-    except ValueError:
-        n = n
-
     tail_test(context, expected_count=expected_count, n=n)
 
 
