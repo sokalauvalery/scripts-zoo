@@ -26,6 +26,7 @@ Feature: Tail N lines of single file
      | abc       | Number of lines should be positive integer    |
      | -1        | Number of lines should be positive integer    |
      | $         | Number of lines should be positive integer    |
+     | тест         | Number of lines should be positive integer    |
 
-  Scenario: Tail nonexistent file file
-    Then Tail nonexistent file "{/fake/path}" return exception "{exception}"
+  Scenario: Tail nonexistent file
+    Then Tail nonexistent file "/fake/path" return exception "No such file /fake/path"

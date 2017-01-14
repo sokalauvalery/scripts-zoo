@@ -76,14 +76,17 @@ class Tail:
                             target.send((file, line))
                         yield from asyncio.sleep(0.1)
 
-        except FileNotFoundError as e:
-            raise TailScriptException(str(e))
+        except FileNotFoundError:
+            raise TailScriptException("No such file {}".format(file))
+        except UnicodeDecodeError:
+            raise TailScriptException("Unable to  decode file with utf-8 encoding.")
 
     def run(self):
         if not isinstance(self.n, int):
             raise TailScriptException('Number of lines should be positive integer')
-        self.loop.run_until_complete(asyncio.wait([self.tail_file(file, target=self.printer()) for file in
-                                                       self.files]))
+        tasks = asyncio.gather(*[asyncio.ensure_future(self.tail_file(file, target=self.printer())) for file in
+                                                       self.files])
+        self.loop.run_until_complete(tasks)
 
 
 
