@@ -13,9 +13,15 @@ HELP_STRING = {
 }
 
 
+class TailScriptException(Exception):
+    pass
+
+
 class Tail:
+    default_lines_count = 10
+
     def __init__(self, files, n=10, quiet=False, bsize=2048, follow=False):
-        self.n = n
+        self.n = n if n is not None else self.default_lines_count
         self.files = files
         self.print_file_name = len(self.files) > 1 and not quiet
         self.loop = asyncio.get_event_loop()
@@ -26,51 +32,59 @@ class Tail:
         raise NotImplemented
 
     def tail_file(self, file, target):
-        with open(file, 'rU') as f:
-            if not f.readline():
-                return
-            sep = f.newlines
-            assert isinstance(sep, str), 'multiple newline types found, aborting'
+        try:
+            with open(file, 'rU') as f:
+                if not f.readline():
+                    return
+                sep = f.newlines
+                assert isinstance(sep, str), 'multiple newline types found, cannot tail file with multiple newline types'
 
-        with open(file, 'rb') as f:
-            f.seek(0, os.SEEK_END)
-            line_count = 0
-            pos = 0
+            with open(file, 'rb') as f:
+                f.seek(0, os.SEEK_END)
+                line_count = 0
+                pos = 0
 
-            while line_count <= self.n + 1:
-                try:
-                    f.seek(-self.bsize, os.SEEK_CUR)
-                    line_count += f.read(self.bsize).count(sep.encode())
-                    f.seek(-self.bsize, os.SEEK_CUR)
-                except IOError as e:
-                    if e.errno == errno.EINVAL:
-                        bsize = f.tell()
-                        f.seek(0, os.SEEK_SET)
-                        line_count += f.read(bsize).count(sep.encode())
-                        break
-                    raise
-                pos = f.tell()
+                while line_count <= self.n + 1:
+                    try:
+                        f.seek(-self.bsize, os.SEEK_CUR)
+                        line_count += f.read(self.bsize).count(sep.encode())
+                        f.seek(-self.bsize, os.SEEK_CUR)
+                    except IOError as e:
+                        if e.errno == errno.EINVAL:
+                            bsize = f.tell()
+                            f.seek(0, os.SEEK_SET)
+                            line_count += f.read(bsize).count(sep.encode())
+                            break
+                        raise
+                    pos = f.tell()
 
-        target.send(None)
-        with open(file, 'r') as f:
-            f.seek(pos, os.SEEK_SET)
-            file_name = file
-            for line in f:
-                if line_count > self.n:
-                    line_count -= 1
-                    continue
-                target.send((file_name, line))
-                file_name = None
+            target.send(None)
+            with open(file, 'r') as f:
+                f.seek(pos, os.SEEK_SET)
+                file_name = file
+                for line in f:
+                    if line_count > self.n:
+                        line_count -= 1
+                        continue
+                    target.send((file_name, line))
+                    file_name = None
 
-            if self.follow:
-                while True:
-                    line = f.readline()
-                    if line:
-                        target.send((file, line))
-                    yield from asyncio.sleep(0.1)
+                if self.follow:
+                    while True:
+                        line = f.readline()
+                        if line:
+                            target.send((file, line))
+                        yield from asyncio.sleep(0.1)
+
+        except FileNotFoundError as e:
+            raise TailScriptException(str(e))
 
     def run(self):
-        self.loop.run_until_complete(asyncio.wait([self.tail_file(file, target=self.printer()) for file in self.files]))
+        if not isinstance(self.n, int):
+            raise TailScriptException('Number of lines should be positive integer')
+        self.loop.run_until_complete(asyncio.wait([self.tail_file(file, target=self.printer()) for file in
+                                                       self.files]))
+
 
 
 class StdoutTail(Tail):
