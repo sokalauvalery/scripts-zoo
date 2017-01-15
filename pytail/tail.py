@@ -31,6 +31,9 @@ class Tail:
     def printer(self):
         raise NotImplemented
 
+    def exception_hander(self, exception):
+        raise NotImplemented
+
     def tail_file(self, file, target):
         try:
             with open(file, 'rU') as f:
@@ -77,9 +80,9 @@ class Tail:
                         yield from asyncio.sleep(0.1)
 
         except FileNotFoundError:
-            raise TailScriptException("No such file {}".format(file))
+            self.exception_hander(TailScriptException("No such file {}".format(file)))
         except UnicodeDecodeError:
-            raise TailScriptException("Unable to  decode file with utf-8 encoding.")
+            self.exception_hander(TailScriptException("Unable to  decode file with utf-8 encoding."))
 
     def run(self):
         if not isinstance(self.n, int):
@@ -89,7 +92,6 @@ class Tail:
         self.loop.run_until_complete(tasks)
 
 
-
 class StdoutTail(Tail):
     def printer(self):
         while True:
@@ -97,6 +99,12 @@ class StdoutTail(Tail):
             if self.print_file_name and file_name:
                 print('==>{}<=='.format(file_name))
             print(line.rstrip(), end="\n")
+
+    def exception_hander(self, exception):
+        print('DEBUG !!!!!!!!!!!!')
+        print(str(exception))
+        # TODO: we can comment re-raising exception if we don't want to see traces in output
+        raise exception
 
 
 def run():
