@@ -33,7 +33,7 @@ Feature: Tail N lines of single file
 
   Scenario: Tail binary file
     Given Generate "test.bin" binary file
-    Then Tail "test.bin" "10" lines returns "Unable to  decode file with utf-8 encoding." exception message
+    Then Tail "test.bin" "10" lines returns "Unable to decode file with utf-8 encoding" exception message
 
   Scenario: Tail 3 lines of empty file
     Given Generate "test.txt" text file of "0" lines

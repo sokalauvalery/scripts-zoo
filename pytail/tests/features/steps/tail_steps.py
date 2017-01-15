@@ -6,26 +6,46 @@ import os
 import contextlib
 from io import StringIO
 from pytail.tail import StdoutTail
-from pytail.tail import TailScriptException
 
 
 def get_last_lines(path, n):
-    with open(path, 'r') as f:
+    with open(os.path.join(TMP_DIR, path), 'r') as f:
         expected_lines = [line.rstrip() for line in f.readlines()[-n:]] if n else []
         return expected_lines
 
 
-def tail_test(file, expected_count, n=None):
+def get_tail_script_output(files, n=None, q=False):
     try:
         n = int(n) if n else n
     except ValueError:
         n = n
-    path = os.path.join(TMP_DIR, file)
-    expected_count = int(expected_count)
+    files = files.split(',') if ',' in files else [files]
+    files = [os.path.join(TMP_DIR, file.strip()) for file in files]
     temp_stdout = StringIO()
     with contextlib.redirect_stdout(temp_stdout):
-        StdoutTail([path], n=n).run()
-    output = [line for line in temp_stdout.getvalue().strip().split('\n') if line]
+        StdoutTail(files, n=n, quiet=q).run()
+    with open(os.path.join(TMP_DIR, 'stdout.ouput'), 'w') as f:
+        f.write(temp_stdout.getvalue().strip())
+
+
+def multi_line_tail_test(files, n=None, q=False):
+    try:
+        n = int(n) if n else n
+    except ValueError:
+        n = n
+    files = files.split(',') if ',' in files else [files]
+    files = [os.path.join(TMP_DIR, file.strip()) for file in files]
+    temp_stdout = StringIO()
+    with contextlib.redirect_stdout(temp_stdout):
+        StdoutTail(files, n=n, quiet=q).run()
+    with open(os.path.join(TMP_DIR, 'stdout.ouput'), 'w') as f:
+        f.write(temp_stdout.getvalue().strip())
+
+
+def single_file_tail_test(path, expected_count):
+    expected_count = int(expected_count)
+    with open(os.path.join(TMP_DIR, 'stdout.ouput'), 'r') as f:
+        output = [line.strip() for line in f.readlines()]
     output_lines_count = len(output)
     assert output_lines_count == expected_count, 'Got unexpected lines count. ' \
                                      'Expected {ec}, actual {ac}'.format(ec=expected_count, ac=output_lines_count)
@@ -54,47 +74,32 @@ def step_impl(context, name):
 
 @then('Tail "{file}" "{n}" lines returns "{expected_count}" lines from given file')
 def step_impl(context, file, n, expected_count):
-    tail_test(file, expected_count=expected_count, n=n)
+    get_tail_script_output(file, n=n)
+    single_file_tail_test(file, expected_count)
 
 
 @then('Tail "{file}" returns "{expected_count}" lines from given file')
 def step_impl(context, file, expected_count):
-    tail_test(file, expected_count=expected_count, n=None)
+    get_tail_script_output(file, n=None)
+    single_file_tail_test(file, expected_count)
 
 
 @then('Tail "{file}" "{n}" lines returns "{message}" exception message')
 def step_impl(context, file, n, message):
-    try:
-        tail_test(file, expected_count=0, n=n)
-    except TailScriptException as e:
-        assert str(e) == message, 'incorrect exception message. \n Expected: \n << {e} >> \n Actual: \n {a}'.format(
-            e=message, a=str(e))
+    get_tail_script_output(file, n=n)
+    with open(os.path.join(TMP_DIR, 'stdout.ouput'), 'r') as f:
+        output = f.read()
+    assert str(message) in str(output), 'No exception message in output. \n Expected message: \n << {e} >> \n Output: ' \
+                                        '\n {a}'.format(e=message, a=str(output))
 
 
 @then('Tail nonexistent file "{path}" return exception "{message}"')
 def step_impl(context, path, message):
-    context.path = path
-    try:
-        temp_stdout = StringIO()
-        with contextlib.redirect_stdout(temp_stdout):
-            StdoutTail([context.path]).run()
-    except TailScriptException as e:
-        assert str(e) == message, 'incorrect exception message. \n Expected: \n << {e} >> \n Actual: \n {a}'.format(
-            e=message, a=str(e))
-
-
-def multi_line_tail_test(files, n=None, q=False):
-    try:
-        n = int(n) if n else n
-    except ValueError:
-        n = n
-    files = files.split(',') if ',' in files else [files]
-    files = [os.path.join(TMP_DIR, file.strip()) for file in files]
-    temp_stdout = StringIO()
-    with contextlib.redirect_stdout(temp_stdout):
-        StdoutTail(files, n=n, quiet=q).run()
-    with open(os.path.join(TMP_DIR, 'stdout.ouput'), 'w') as f:
-        f.write(temp_stdout.getvalue().strip())
+    get_tail_script_output(path, n=None)
+    with open(os.path.join(TMP_DIR, 'stdout.ouput'), 'r') as f:
+        output = f.read()
+        assert message in output, 'No exception message in output. \n Expected message: \n << {e} >> \n Output: ' \
+                                  '\n {a}'.format(e=message, a=str(output))
 
 
 @when('Run tail command for files "{files}" with default parameters')
@@ -124,8 +129,9 @@ def step_impl(context, n, file):
             break
         if file_name_from_output:
             file_lines_in_output.append(line.rstrip('\n'))
-    assert expected_lines == file_lines_in_output, 'Returned lines are different from expected. \n' \
-                                         'Expected << {e} >> \n\n Actual << {a} >>'.format(e=expected_lines, a=file_lines_in_output)
+    assert expected_lines == file_lines_in_output, 'Returned lines are different from expected. \nExpected << {e} >> ' \
+                                                   '\n\n Actual << {a} >>'.format(e=expected_lines,
+                                                                                  a=file_lines_in_output)
 
 
 @then('Output contains last "{n}" lines from "{file}" file and no file names')
@@ -140,8 +146,8 @@ def step_impl(context, n, file):
             i += 1
         if i == len(expected_lines) - 1:
             break
-    assert i == len(expected_lines)-1, 'Returned lines are different from expected. \n' \
-                                         'Expected << {e} >> \n\n Actual << {a} >>'.format(e=expected_lines, a=output)
+    assert i == len(expected_lines)-1, 'Returned lines are different from expected. \n Expected << {e} >> \n\n ' \
+                                       'Actual << {a} >>'.format(e=expected_lines, a=output)
 
 
 @when('Tail "{n}" lines for files "{files}" with quiet mode')

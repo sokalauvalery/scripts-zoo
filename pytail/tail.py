@@ -82,11 +82,12 @@ class Tail:
         except FileNotFoundError:
             self.exception_hander(TailScriptException("No such file {}".format(file)))
         except UnicodeDecodeError:
-            self.exception_hander(TailScriptException("Unable to  decode file with utf-8 encoding."))
+            self.exception_hander(TailScriptException("Unable to decode file with utf-8 encoding. {}".format(file)))
 
     def run(self):
-        if not isinstance(self.n, int):
-            raise TailScriptException('Number of lines should be positive integer')
+        if not isinstance(self.n, int) or self.n < 0:
+            self.exception_hander(TailScriptException('Number of lines should be positive integer'))
+            return
         tasks = asyncio.gather(*[asyncio.ensure_future(self.tail_file(file, target=self.printer())) for file in
                                                        self.files])
         self.loop.run_until_complete(tasks)
@@ -101,10 +102,7 @@ class StdoutTail(Tail):
             print(line.rstrip(), end="\n")
 
     def exception_hander(self, exception):
-        print('DEBUG !!!!!!!!!!!!')
-        print(str(exception))
-        # TODO: we can comment re-raising exception if we don't want to see traces in output
-        raise exception
+        print('pyTail: Error: ' + str(exception))
 
 
 def run():
